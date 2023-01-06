@@ -72,19 +72,21 @@ func (p *PingHandler) Start(c net.Conn, pt time.Duration) {
 		case <-checkTicker.C:
 			if atomic.LoadInt32(&p.pingOutstanding) > 0 && time.Since(p.lastPing) > (pt+pt>>1) {
 				p.pingFailHandler(fmt.Errorf("ping resp timed out"))
-				//ping outstanding and not reset in 1.5 times ping timer
+				// ping outstanding and not reset in 1.5 times ping timer
 				return
 			}
 			if time.Since(p.lastPing) >= pt {
-				//time to send a ping
+				// time to send a ping
 				if _, err := packets.NewControlPacket(packets.PINGREQ).WriteTo(p.conn); err != nil {
 					if p.pingFailHandler != nil {
 						p.pingFailHandler(err)
 					}
 					return
 				}
+				if atomic.LoadInt32(&p.pingOutstanding) == 0 {
+					p.lastPing = time.Now()
+				}
 				atomic.AddInt32(&p.pingOutstanding, 1)
-				p.lastPing = time.Now()
 				p.debug.Println("pingHandler sending ping request")
 			}
 		}
@@ -102,7 +104,7 @@ func (p *PingHandler) Stop() {
 	p.debug.Println("pingHandler stopping")
 	select {
 	case <-p.stop:
-		//Already stopped, do nothing
+		// Already stopped, do nothing
 	default:
 		close(p.stop)
 	}
